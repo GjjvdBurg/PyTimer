@@ -16,7 +16,6 @@ UI:
 
  +==============================+
  | Title:            Test Timer |
- |                              |
  | Status:              RUNNING |
  |                              |
  |           History            |
@@ -24,7 +23,7 @@ UI:
  | ----------          -------- |
  | 2015-05-03          00:10:00 |
  | 2015-05-04          00:15:00 |
- | Total 	      00:25:00 |
+ | Total 	      00:25:00  |
  |                              |
  |            Today             |
  | Changed at          Elapsed  |
@@ -325,7 +324,6 @@ class Timer(object):
         self.loop_printer.clear()
         title = ('Title:', self.title)
         self.loop_printer.add_line(title, align='border', color='blue')
-        self.loop_printer.add_line('')
         if self.is_running:
             status = ('Status:', 'RUNNING')
             self.loop_printer.add_line(status, align='border', color='green')

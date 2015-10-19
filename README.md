@@ -1,2 +1,5 @@
-# PyTimer
-A command line time tracking application
+PyTimer
+=======
+
+A command line time tracking application.
+

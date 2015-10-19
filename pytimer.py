@@ -14,25 +14,28 @@ Simple timer application which:
 
 UI:
 
-+==============================+
-| Title: Test Timer            |
-|                              |
-|           History            |
-| Date                Total    |
-| ----------          -------- |
-| 2015-05-03          00:10:00 |
-| 2015-05-04          00:15:00 |
-| Total 	      00:25:00 |
-|                              |
-|         Current Run          |
-| Status 	      Elapsed  |
-| ----------          -------- |
-| RUNNING             00:00:01 |
-| HALTED              00:00:01 |
-|                              |
-| Total Elapsed:      00:25:01 |
-| Current Time:       23:33:08 |
-+==============================+
+ +==============================+
+ | Title:            Test Timer |
+ |                              |
+ | Status:              RUNNING |
+ |                              |
+ |           History            |
+ | Date                Total    |
+ | ----------          -------- |
+ | 2015-05-03          00:10:00 |
+ | 2015-05-04          00:15:00 |
+ | Total 	      00:25:00 |
+ |                              |
+ |            Today             |
+ | Changed at          Elapsed  |
+ | ----------          -------- |
+ | 23:51:06            00:00:00 | <- green
+ | 23:55:16            00:04:10 | <- red
+ | 23:55:20            00:04:10 | <- green
+ |                              |
+ | Total Elapsed:      00:25:01 |
+ | Current Time:       23:33:08 |
+ +==============================+
 
 """
 
@@ -66,7 +69,7 @@ def sec2str(seconds):
 
 class LoopPrinter(object):
 
-    LEDGE = colored('| ', 'yellow')
+    LEDGE = colored(' | ', 'yellow')
     REDGE = colored(' |\n', 'yellow')
 
     def __init__(self):
@@ -104,7 +107,7 @@ class LoopPrinter(object):
             else:
                 maxlen = max([maxlen, len(line)])
         s = ''
-        topbottom = colored('+' + '='*(maxlen+2) + '+', 'yellow')
+        topbottom = colored(' +' + '='*(maxlen+2) + '+', 'yellow')
         s += topbottom + '\n'
         for align, line, color in self.text:
             if align == 'left':
@@ -286,12 +289,11 @@ class Timer(object):
         if self.is_running:
             diff = datetime.datetime.now() - self.time
             self.current_seconds += diff.total_seconds()
-            self.time = datetime.datetime.now()
             self.end_time = datetime.datetime.now()
             self.logger.log_json(self.start_time, self.end_time)
         else:
-            self.time = datetime.datetime.now()
             self.start_time = datetime.datetime.now()
+        self.time = datetime.datetime.now()
         self.is_running = not self.is_running
         self.logger.log_state(self.is_running, self.current_seconds)
         self.save_state()
@@ -300,16 +302,18 @@ class Timer(object):
     def save_state(self):
         elaps = sec2str(self.current_seconds)
         if self.is_running:
-            line = ((('RUNNING', elaps), 'border', 'green'))
+            line = (((self.time.strftime('%H:%M:%S'), elaps), 'border', 
+                'green'))
         else:
-            line = ((('HALTED', elaps), 'border', 'red'))
+            line = (((self.time.strftime('%H:%M:%S'), elaps), 'border', 
+                'red'))
         self.current_lines.append(line)
 
     def get_current_table(self):
         if not self.current_lines:
             return []
         lines = []
-        lines.append((('Status', 'Elapsed '), 'border', 'yellow'))
+        lines.append((('Changed at', 'Elapsed '), 'border', 'yellow'))
         lines.append((('-'*10, '-'*8), 'border', 'yellow'))
         lines.extend(self.current_lines)
         return lines
@@ -319,8 +323,15 @@ class Timer(object):
 
     def make_report(self):
         self.loop_printer.clear()
-        title = 'Title: %s' % self.title
-        self.loop_printer.add_line(title, align='left', color='blue')
+        title = ('Title:', self.title)
+        self.loop_printer.add_line(title, align='border', color='blue')
+        self.loop_printer.add_line('')
+        if self.is_running:
+            status = ('Status:', 'RUNNING')
+            self.loop_printer.add_line(status, align='border', color='green')
+        else:
+            status = ('Status:', 'HALTED')
+            self.loop_printer.add_line(status, align='border', color='red')
         self.loop_printer.add_line('')
         history = self.timer_history.make_table_lines()
         if history:
@@ -329,8 +340,7 @@ class Timer(object):
             for line in history:
                 self.loop_printer.add_line(*line)
             self.loop_printer.add_line('')
-        self.loop_printer.add_line('Current Run', align='center', 
-                color='white')
+        self.loop_printer.add_line('Today', align='center', color='white')
         current = self.get_current_table()
         if current:
             for line in current:

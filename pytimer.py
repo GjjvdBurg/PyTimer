@@ -14,16 +14,25 @@ Simple timer application which:
 
 UI:
 
-            Timer Title
-            ===========
-
-    Past sessions:
-    Start Date\tStart Time\tEnd Date\tEnd Time\tElapsed Time\n
-    ----------\t----------\t--------\t--------\t------------\n
-    %Y/%m/%d\t%H:%M:%S\t%H:%M:%S\t%Y/%m/%d\t%H:%M:%S\n\n
-    STATE\tElapsed Time\tTotal Elapsed\tCurrent Time\n
-    -----\t------------\t-------------\t------------\n
-    RUNNING\t%H:%M:%S\t%H:%M:%S\t%H:%M:%S\r
++==============================+
+| Title: Test Timer            |
+|                              |
+|           History            |
+| Date                Total    |
+| ----------          -------- |
+| 2015-05-03          00:10:00 |
+| 2015-05-04          00:15:00 |
+| Total 	      00:25:00 |
+|                              |
+|         Current Run          |
+| Status 	      Elapsed  |
+| ----------          -------- |
+| RUNNING             00:00:01 |
+| HALTED              00:00:01 |
+|                              |
+| Total Elapsed:      00:25:01 |
+| Current Time:       23:33:08 |
++==============================+
 
 """
 
@@ -49,58 +58,149 @@ EPOCH = datetime.datetime.utcfromtimestamp(0)
 def _(a):
     cprint(a, 'magenta')
 
-class Clock(object):
+def sec2str(seconds):
+    hours = seconds // 3600
+    minutes = (seconds - 3600*hours) // 60
+    secs = (seconds % 60) // 1
+    return '%02i:%02i:%02i' % (hours, minutes, secs)
+
+class LoopPrinter(object):
+
+    LEDGE = colored('| ', 'yellow')
+    REDGE = colored(' |\n', 'yellow')
 
     def __init__(self):
+        self.text = []
         self.running = False
-        self.state_string = ''
         self.die = False
 
     def run(self):
         self.running = True
 
-    def start(self):
+    def launch(self):
         while not self.die:
             if self.running:
-                self.show_time()
+                self.remove_last()
+                self.add_time()
+                self.print_out()
             time.sleep(1)
 
     def stop(self):
         self.die = True
 
-    def show_time(self):
+    def add_time(self):
         dt = datetime.datetime.now()
-        msg = '        '.join([self.state_string,
-            dt.strftime('%H:%M:%S')])
-        size = shutil.get_terminal_size()
-        msg += ' '*(size.columns - len(msg))
-        sys.stdout.write("{}\r".format(msg))
+        msg = ('Current Time:', dt.strftime('%H:%M:%S'))
+        self.add_line(msg, align='border')
+
+    def add_line(self, line, align='left', color='white'):
+        self.text.append((align, line, color))
+
+    def make_boxed(self):
+        maxlen = 0
+        for align, line, color in self.text:
+            if isinstance(line, list) or isinstance(line, tuple):
+                maxlen = max([maxlen, 6+sum([len(x) for x in line])])
+            else:
+                maxlen = max([maxlen, len(line)])
+        s = ''
+        topbottom = colored('+' + '='*(maxlen+2) + '+', 'yellow')
+        s += topbottom + '\n'
+        for align, line, color in self.text:
+            if align == 'left':
+                l = maxlen - len(line)
+                s += self.LEDGE + colored(line, color) + ' '*l + self.REDGE
+            elif align == 'right':
+                l = maxlen - len(line)
+                s += self.LEDGE + ' '*l + colored(line, color) + self.REDGE
+            elif align == 'center':
+                if maxlen % 2 == 0:
+                    l1 = int((maxlen - len(line))/2)
+                    l2 = l1 + 1
+                else:
+                    l1 = int((maxlen - len(line))/2)
+                    l2 = int((maxlen - len(line))/2)
+                s += (self.LEDGE + ' '*l1 + colored(line, color) + ' '*l2 + 
+                        self.REDGE)
+            elif align == 'border' and len(line) == 2:
+                lenspaces = maxlen - len(line[0]) - len(line[1])
+                lenspaces = max(lenspaces, 1)
+                s += (self.LEDGE + colored(line[0], color) + ' '*lenspaces + 
+                        colored(line[1], color) + self.REDGE)
+        s += topbottom
+        return s
+
+    def remove_last(self):
+        if len(self.text):
+            tmp = self.text.pop()
+
+    def clear(self):
+        del self.text
+        self.text = []
+
+    def print_out(self):
+        boxed = self.make_boxed()
+        os.system('cls' if os.name == 'nt' else 'clear')
+        for line in boxed.split('\n'):
+            sys.stdout.write(line + '\r\n')
         sys.stdout.flush()
 
-class Timer(object):
+class TimerHistory(object):
+
+    def __init__(self, json_file=None):
+        self.history = {}
+        if not json_file is None:
+            self.read_json_file(json_file)
+
+    def add_record(self, record):
+        # record is (date_obj, seconds)
+        date, seconds = record
+        if date in self.history:
+            self.history[date] += seconds
+        else:
+            self.history[date] = seconds
+
+    def read_json_file(self, filename):
+        with open(filename, 'r') as fid:
+            lines = fid.readlines()
+        for line in lines:
+            self.read_json_line(line)
+
+    def read_json_line(self, jsonline):
+        data = json.loads(jsonline)
+        start_t = dateutil.parser.parse(data['start_time'])
+        end_t = dateutil.parser.parse(data['end_time'])
+        seconds = (end_t - start_t).total_seconds()
+        date = start_t.date()
+        record = (date, seconds)
+        self.add_record(record)
+
+    def get_total(self):
+        total = 0
+        for date in self.history:
+            total += self.history[date]
+        return total
+
+    def make_table_lines(self):
+        if not self.history:
+            return []
+        lines = []
+        lines.append((('Date', 'Elapsed '), 'border', 'yellow'))
+        lines.append((('-'*10, '-'*8), 'border', 'yellow'))
+        for date in sorted(self.history):
+            datestr = date.strftime('%Y-%m-%d')
+            secstr = sec2str(self.history[date])
+            lines.append(((datestr, secstr), 'border', 'white'))
+        total = self.get_total()
+        lines.append((('Total', sec2str(total)), 'border', 'magenta'))
+        return lines
+
+class Logger(object):
 
     def __init__(self, title):
-        self.is_running = False
-        self.total_seconds = 0
-        self.seconds = 0
-        self.time = datetime.datetime.now()
-        self.start_time = None
-        self.end_time = None
-        self.clock = None
         self.title = title
-        self.thread = None
-        self.max_hdr_len = 0
-        self.max_lhdr_len = 0
-
-        if title is None:
-            title = self.ask_title()
-            if title is None:
-                epoch = (datetime.datetime.now() - EPOCH).total_seconds()
-                title = str(epoch)
-
         self.log_file = self.get_logfile()
         self.json_file = self.get_jsonfile()
-        self.start()
 
     def get_logfile(self):
         fname = ('%s/pytimer_%s.log' % (get_logdir(),
@@ -112,44 +212,69 @@ class Timer(object):
             self.title.lower().replace(' ', '_')))
         return fname
 
-    def log_state(self, msg):
+    def log_state(self, is_running, seconds):
         epoch_secs = (datetime.datetime.now() - EPOCH).total_seconds()
         with open(self.log_file, 'a') as fid:
-            fid.write('%i: %s\n' % (epoch_secs, msg))
+            if is_running:
+                fid.write('%i: RUNNING: %i\n' % (epoch_secs, seconds))
+            else:
+                fid.write('%i: HALTED: %i\n' % (epoch_secs, seconds))
 
-    def log_json(self):
-        if self.start_time is None or self.end_time is None:
+    def log_json(self, start_t, end_t):
+        if start_t is None or end_t is None:
             return
-        data = {'start_time': self.start_time.strftime('%c'),
-                'end_time': self.end_time.strftime('%c'),
+        data = {'start_time': start_t.strftime('%c'),
+                'end_time': end_t.strftime('%c'),
                 'title': self.title}
         with open(self.json_file, 'a') as fid:
             json.dump(data, fid, sort_keys=True)
             fid.write('\n')
 
-    def start_clock(self):
-        self.clock = Clock()
-        self.thread = threading.Thread(target=self.clock.start)
-        self.thread.start()
+class Timer(object):
 
-    def stop_clock(self):
-        self.clock.stop()
-        self.thread.join()
+    def __init__(self, title=None, json_file=None):
+        self.is_running = False
+        self.current_seconds = 0
+        self.time = datetime.datetime.now()
+        self.start_time = None
+        self.end_time = None
+        self.title = title
+        self.thread = None
+        self.current_lines = []
 
-    def start(self):
-        self.print_title()
-        self.start_clock()
+        self.init_title()
+        self.timer_history = TimerHistory(json_file)
+        self.logger = Logger(self.title)
+        self.loop_printer = None
 
-    def stop(self):
+        self.setup()
+
+    def init_title(self):
+        if self.title is None:
+            qry = input("Enter timer name: ")
+            if not qry.strip():
+                epoch = (datetime.datetime.now() - EPOCH).total_seconds()
+                self.title = str(epoch)
+                _("Using unnamed timer.")
+            else:
+                self.title = qry.strip()
+                _("Using timer name: {}".format(self.title))
+
+    def cleanup(self):
         if self.is_running:
             self.switch()
             time.sleep(1)
-        self.stop_clock()
+        self.loop_printer.stop()
+        self.thread.join()
 
-    def run(self):
-        self.print_state_header()
+    def setup(self):
+        self.loop_printer = LoopPrinter()
+        self.thread = threading.Thread(target=self.loop_printer.launch)
+        self.thread.start()
+
+    def start(self):
         self.switch()
-        self.clock.run()
+        self.loop_printer.run()
         while True:
             k = readchar.readkey()
             if k == ' ':
@@ -158,102 +283,63 @@ class Timer(object):
                 raise SystemExit
 
     def switch(self):
-        print()
         if self.is_running:
             diff = datetime.datetime.now() - self.time
-            self.seconds += diff.total_seconds()
+            self.current_seconds += diff.total_seconds()
             self.time = datetime.datetime.now()
             self.end_time = datetime.datetime.now()
-            self.log_json()
+            self.logger.log_json(self.start_time, self.end_time)
         else:
             self.time = datetime.datetime.now()
             self.start_time = datetime.datetime.now()
         self.is_running = not self.is_running
-        state = self.set_state()
-        self.log_state(state)
+        self.logger.log_state(self.is_running, self.current_seconds)
+        self.save_state()
+        self.make_report()
 
-    def ask_title(self):
-        qry = input("Enter timer name: ")
-        if not qry.strip():
-            self.title = None
-            _("Using unnamed timer.")
-        else:
-            self.title = qry.strip()
-            _("Using timer name: {}".format(self.title))
-
-    def print_title(self):
-        os.system('cls' if os.name == 'nt' else 'clear')
-        title = 'Timer: ' + self.title
-        titlelen = len(title)
-        dsh = ''.join(['=']*titlelen)
-        msg = '{}\n{}\n'.format(title, dsh)
-        cprint(msg, 'blue')
-
-    def set_state(self):
+    def save_state(self):
+        elaps = sec2str(self.current_seconds)
         if self.is_running:
-            state = colored('RUNNING', 'green') + ' '*(self.max_hdr_len - 7)
+            line = ((('RUNNING', elaps), 'border', 'green'))
         else:
-            state = colored('HALTED', 'red') + ' '*(self.max_hdr_len - 6)
-        elaps = self.string_from_seconds(self.seconds)
-        elaps += ' '*(self.max_hdr_len - len(elaps))
-        total = self.string_from_seconds(self.total_seconds + self.seconds)
-        total += ' '*(self.max_hdr_len - len(total))
-        elem = [state, elaps, total]
-        msg = '        '.join(elem)
-        self.clock.state_string = msg
-        return msg
+            line = ((('HALTED', elaps), 'border', 'red'))
+        self.current_lines.append(line)
 
-    def print_state_header(self):
-        elem = ['State', 'Elapsed', 'Total Elapsed', 'Current Time']
-        self.max_hdr_len = max([len(x) for x in elem])
-        elem = [x + ' '*(self.max_hdr_len - len(x)) for x in elem]
-        dash = ['-'*len(x) for x in elem]
-        hdr = '        '.join(elem)
-        dsh = '        '.join(dash)
-        msg = '\n'.join([hdr, dsh])
-        cprint(msg, 'yellow', end='')
+    def get_current_table(self):
+        if not self.current_lines:
+            return []
+        lines = []
+        lines.append((('Status', 'Elapsed '), 'border', 'yellow'))
+        lines.append((('-'*10, '-'*8), 'border', 'yellow'))
+        lines.extend(self.current_lines)
+        return lines
 
-    def print_loaded_header(self):
-        elem = ['Start Date', 'Start Time', 'End Date', 'End Time',
-                'Elapsed Time']
-        self.max_lhdr_len = max([len(x) for x in elem])
-        elem = [x + ' '*(self.max_lhdr_len - len(x)) for x in elem]
-        dash = ['-'*len(x) for x in elem]
-        hdr = (' '*8).join(elem)
-        dsh = (' '*8).join(dash)
-        msg = '\n'.join([hdr, dsh])
-        cprint(msg, 'yellow')
+    def get_total_seconds(self):
+        return self.timer_history.get_total() + self.current_seconds
 
-    def print_loaded_line(self, start_t, end_t, seconds):
-        elem = [start_t.strftime('%Y-%m-%d'), start_t.strftime('%H:%M:%S'),
-                end_t.strftime('%Y-%m-%d'), end_t.strftime('%H:%M:%S'),
-                self.string_from_seconds(seconds)]
-        elem = [x + ' '*(self.max_lhdr_len - len(x)) for x in elem]
-        msg = (' '*8).join(elem)
-        cprint(msg, 'white')
-
-    def string_from_seconds(self, seconds):
-        hours = seconds // 3600
-        minutes = (seconds - 3600*hours) // 60
-        seconds = (seconds % 60) // 1
-        return '%02i:%02i:%02i' % (hours, minutes, seconds)
-
-    @classmethod
-    def load_json(cls, filename):
-        with open(filename, 'r') as fid:
-            lines = fid.readlines()
-        title = json.loads(lines[0])['title']
-        timer = cls(title)
-        timer.print_loaded_header()
-        for line in lines:
-            data = json.loads(line)
-            start_t = dateutil.parser.parse(data['start_time'])
-            end_t = dateutil.parser.parse(data['end_time'])
-            seconds = (end_t - start_t).total_seconds()
-            timer.total_seconds += seconds
-            timer.print_loaded_line(start_t, end_t, seconds)
-        print()
-        return timer
+    def make_report(self):
+        self.loop_printer.clear()
+        title = 'Title: %s' % self.title
+        self.loop_printer.add_line(title, align='left', color='blue')
+        self.loop_printer.add_line('')
+        history = self.timer_history.make_table_lines()
+        if history:
+            self.loop_printer.add_line('History', align='center', 
+                    color='white')
+            for line in history:
+                self.loop_printer.add_line(*line)
+            self.loop_printer.add_line('')
+        self.loop_printer.add_line('Current Run', align='center', 
+                color='white')
+        current = self.get_current_table()
+        if current:
+            for line in current:
+                self.loop_printer.add_line(*line)
+            self.loop_printer.add_line('')
+        self.loop_printer.add_line(('Total Elapsed:',
+            sec2str(self.get_total_seconds())), align='border', 
+            color='magenta')
+        self.loop_printer.add_line('')
 
 def get_logdir():
     dirname = os.path.expanduser(os.path.join('~', '.' + APPNAME))
@@ -285,7 +371,7 @@ def choose_timer():
         idx = int(inp)
         break
     fname = os.path.join(get_logdir(), timer_files[idx])
-    return Timer.load_json(fname)
+    return Timer(title=titles[idx], json_file=fname)
 
 def ask_launch_new():
     while True:
@@ -306,11 +392,11 @@ def ask_launch_new():
 def run_timer(timer):
     # Start the timer
     try:
-        timer.run()
+        timer.start()
     except (KeyboardInterrupt, EOFError):
         pass
     finally:
-        timer.stop()
+        timer.cleanup()
         print()
 
 def parse_options():

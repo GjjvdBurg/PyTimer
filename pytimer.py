@@ -256,7 +256,7 @@ class Timer(object):
             qry = input("Enter timer name: ")
             if not qry.strip():
                 epoch = (datetime.datetime.now() - EPOCH).total_seconds()
-                self.title = str(epoch)
+                self.title = str(round(epoch))
                 _("Using unnamed timer.")
             else:
                 self.title = qry.strip()

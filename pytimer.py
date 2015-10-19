@@ -210,7 +210,7 @@ class Logger(object):
         return fname
 
     def get_jsonfile(self):
-        fname = ('%s/%s_pytimer.json' % (get_logdir(),
+        fname = ('%s/pytimer_%s.json' % (get_logdir(),
             self.title.lower().replace(' ', '_')))
         return fname
 
@@ -357,7 +357,7 @@ def get_logdir():
 
 def choose_timer():
     files = os.listdir(get_logdir())
-    timer_files = [x for x in files if x.endswith('_pytimer.json')]
+    timer_files = [x for x in files if x.endswith('.json')]
     if not timer_files:
         _("No exising timers found. Creating a new one.")
         return Timer(None)

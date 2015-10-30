@@ -365,14 +365,19 @@ def choose_timer():
     for timer_file in timer_files:
         fname = os.path.join(get_logdir(), timer_file)
         with open(fname, 'r') as fid:
-            line = fid.readline()
-            data = json.loads(line)
-            titles.append(data['title'])
-    for i, title, filename in zip(range(len(titles)), titles, timer_files):
-        _("%i: %s\t[%s]" % (i, title, filename))
+            lines = fid.readlines()
+            data = json.loads(lines[-1])
+            latest = dateutil.parser.parse(data['end_time'])
+            tup = (latest, data['title'])
+            titles.append(tup)
+    titles.sort(reverse=True)
+    for i, tup, filename in zip(range(len(titles)), titles, timer_files):
+        _("%i: %s\t[%s]" % (i, tup[-1], filename))
     while True:
         inp = input("Please choose a timer from the list above using "
                 "the number in front of the line. ")
+        if inp.strip() == 'q':
+            raise SystemExit
         if not inp.isdigit():
             _("Not a valid choice, please try again.")
             continue

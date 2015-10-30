@@ -361,18 +361,18 @@ def choose_timer():
     if not timer_files:
         _("No exising timers found. Creating a new one.")
         return Timer(None)
-    titles = []
+    tuples = []
     for timer_file in timer_files:
         fname = os.path.join(get_logdir(), timer_file)
         with open(fname, 'r') as fid:
             lines = fid.readlines()
             data = json.loads(lines[-1])
             latest = dateutil.parser.parse(data['end_time'])
-            tup = (latest, data['title'])
-            titles.append(tup)
-    titles.sort(reverse=True)
-    for i, tup, filename in zip(range(len(titles)), titles, timer_files):
-        _("%i: %s\t[%s]" % (i, tup[-1], filename))
+            tup = (latest, data['title'], fname)
+            tuples.append(tup)
+    tuples.sort(reverse=True)
+    for i, tup in zip(range(len(tuples)), tuples):
+        _("%i: %s" % (i, tup[1]))
     while True:
         inp = input("Please choose a timer from the list above using "
                 "the number in front of the line. ")
@@ -383,8 +383,8 @@ def choose_timer():
             continue
         idx = int(inp)
         break
-    fname = os.path.join(get_logdir(), timer_files[idx])
-    return Timer(title=titles[idx], json_file=fname)
+    dt, title, fname = tuples[idx]
+    return Timer(title=title, json_file=fname)
 
 def ask_launch_new():
     while True:

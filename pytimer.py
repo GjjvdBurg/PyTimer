@@ -23,7 +23,7 @@ UI:
  | ----------          -------- |
  | 2015-05-03          00:10:00 |
  | 2015-05-04          00:15:00 |
- | Total 	       00:25:00 |
+ | Total 	           00:25:00 |
  |                              |
  |            Today             |
  | Changed at          Elapsed  |
@@ -47,7 +47,6 @@ import json
 import os
 import readchar
 import signal
-import shutil
 import sys
 import time
 import threading
@@ -56,6 +55,7 @@ from termcolor import colored, cprint
 
 APPNAME = 'PyTimer'
 EPOCH = datetime.datetime.utcfromtimestamp(0)
+LOGDIR = None
 
 def _(a):
     cprint(a, 'magenta')
@@ -134,7 +134,7 @@ class LoopPrinter(object):
 
     def remove_last(self):
         if len(self.text):
-            tmp = self.text.pop()
+            del self.text[-1]
 
     def clear(self):
         del self.text
@@ -350,7 +350,10 @@ class Timer(object):
         self.loop_printer.add_line('')
 
 def get_logdir():
-    dirname = os.path.expanduser(os.path.join('~', '.' + APPNAME))
+    if not LOGDIR is None:
+        dirname = LOGDIR
+    else:
+        dirname = os.path.expanduser(os.path.join('~', '.' + APPNAME))
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     return dirname
